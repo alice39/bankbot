@@ -1,3 +1,6 @@
+use dotenv::dotenv;
+use std::env;
+
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
@@ -30,8 +33,7 @@ impl EventHandler for Handler {
 				if balance != 0 {
 					let info = CurrencyInfo::new(currency);
 					let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
-					let formatted = format!("{:.02}", balance);
-					let response = info.code + " " + &formatted;
+					let response = format!("> {} {:.02}", &info.code, balance);
 					msg.channel_id.say(&ctx.http, response).await.unwrap();
 					found = true;
 					break;
@@ -51,12 +53,10 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
-	/*for (key, value) in env::vars() {
-		println!("{key}: {value}");
-	}*/
+	dotenv().ok();
 
-	// let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment.");
-	let token = "OTYzMDk2MzE3NjM3Mjk2MjY5.YlRHVw.YkAx89wl14CfTmu906NCgIJMP6M";
+	let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment.");
+	// let token = "OTYzMDk2MzE3NjM3Mjk2MjY5.YlRHVw.YkAx89wl14CfTmu906NCgIJMP6M";
 
 
 	let intents = GatewayIntents::GUILD_MESSAGES
