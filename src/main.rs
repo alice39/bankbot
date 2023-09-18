@@ -56,8 +56,6 @@ async fn main() {
 	dotenv().ok();
 
 	let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment.");
-	// let token = "OTYzMDk2MzE3NjM3Mjk2MjY5.YlRHVw.YkAx89wl14CfTmu906NCgIJMP6M";
-
 
 	let intents = GatewayIntents::GUILD_MESSAGES
 		| GatewayIntents::DIRECT_MESSAGES
