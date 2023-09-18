@@ -4,6 +4,12 @@ pub enum Currency {
 	BRL,
 }
 
+pub static ALL_CURRENCY : [Currency; 3] = [
+	Currency::KSN,
+	Currency::USD,
+	Currency::BRL,
+];
+
 pub struct CurrencyInfo {
 	pub code : String,
 	pub prefix : String,
