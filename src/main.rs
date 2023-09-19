@@ -28,21 +28,31 @@ impl EventHandler for Handler {
 		if msg.content.starts_with("!balance") {
 			let author_id : i64 = *msg.author.id.as_u64() as i64;
 			let mut found = false;
+			let mut response : String = String::from("");
+			let image = "https://cdn.discordapp.com/attachments/1153482364907962509/1153482411871584267/currency_dollar_blue.png";
 			for currency in ALL_CURRENCY.iter() {
 				let balance = operation::get_balance(author_id, currency).await;
 				if balance != 0 {
 					let info = CurrencyInfo::new(currency);
 					let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
-					let response = format!("> {} {:.02}", &info.code, balance);
-					msg.channel_id.say(&ctx.http, response).await.unwrap();
+					response = format!("`{} {:.02}`", &info.code, balance);
 					found = true;
 					break;
 				}
 			}
 
 			if found == false {
-				msg.channel_id.say(&ctx.http, "KSN 0.00").await.unwrap();
+				response = String::from("`KSN 0.00`");
 			}
+
+			msg.channel_id.send_message(&ctx.http, |m|
+			{
+				m.embed(|e| {
+					e.title("Balance")
+						.description(response)
+						.thumbnail(image)
+				})
+			}).await;
 		}
 	}
 
