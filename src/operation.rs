@@ -72,7 +72,7 @@ fn get_statement(from_account: i64, currency: Currency, entries: i64) {
 
 #[derive(Debug)]
 pub enum TransferStatus {
-	Authorized, InsuficientBalance, Unauthorized,
+	Authorized, InsuficientBalance, BadValue, Unauthorized,
 }
 
 pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Currency, value: i64) -> TransferStatus {
@@ -81,6 +81,10 @@ pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Curren
 
 	let before_from_balance = get_balance(from_account, &currency).await;
 	let before_to_balance = get_balance(to_account, &currency).await;
+
+	if value <= 0 {
+		return TransferStatus::BadValue;
+	}
 
 	if value > before_from_balance && from_account != 0 {
 		return TransferStatus::InsuficientBalance;
@@ -91,13 +95,13 @@ pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Curren
 	let timestamp_now = get_current_time();
 
 	let query = sqlx::query("INSERT INTO Transfer (transfer_date, from_account, to_account, from_balance, to_balance, currency, value) VALUES (?, ?, ?, ?, ?, ?, ?)")
-	.bind(timestamp_now)
-	.bind(from_account)
-	.bind(to_account)
-	.bind(after_from_balance)
-	.bind(after_to_balance)
-	.bind(currency_info.code)
-	.bind(value);
+		.bind(timestamp_now)
+		.bind(from_account)
+		.bind(to_account)
+		.bind(after_from_balance)
+		.bind(after_to_balance)
+		.bind(currency_info.code)
+		.bind(value);
 
 	conn.execute(query).await.unwrap();
 	return TransferStatus::Authorized;

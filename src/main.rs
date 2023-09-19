@@ -12,6 +12,10 @@ use currency::{Currency, ALL_CURRENCY, CurrencyInfo};
 mod operation;
 use operation::get_balance;
 
+mod commands;
+use commands::get_balance_command;
+
+
 
 
 struct Handler;
@@ -26,33 +30,11 @@ impl EventHandler for Handler {
 		}
 
 		if msg.content.starts_with("!balance") {
-			let author_id : i64 = *msg.author.id.as_u64() as i64;
-			let mut found = false;
-			let mut response : String = String::from("");
-			let image = "https://cdn.discordapp.com/attachments/1153482364907962509/1153482411871584267/currency_dollar_blue.png";
-			for currency in ALL_CURRENCY.iter() {
-				let balance = operation::get_balance(author_id, currency).await;
-				if balance != 0 {
-					let info = CurrencyInfo::new(currency);
-					let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
-					response = format!("`{} {:.02}`", &info.code, balance);
-					found = true;
-					break;
-				}
-			}
+			commands::get_balance_command(&ctx, &msg).await;
+		}
 
-			if found == false {
-				response = String::from("`KSN 0.00`");
-			}
-
-			msg.channel_id.send_message(&ctx.http, |m|
-			{
-				m.embed(|e| {
-					e.title("Balance")
-						.description(response)
-						.thumbnail(image)
-				})
-			}).await;
+		if msg.content.starts_with("!transfer") {
+			commands::transfer_command(&ctx, &msg).await;
 		}
 	}
 
