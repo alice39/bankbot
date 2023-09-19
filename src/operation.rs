@@ -1,4 +1,3 @@
-// use crate::Currency;
 use crate::currency::{Currency, CurrencyInfo};
 use sqlx::Connection;
 use sqlx::SqliteConnection;
