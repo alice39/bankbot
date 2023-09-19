@@ -7,13 +7,8 @@ use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
 mod currency;
-use currency::{Currency, ALL_CURRENCY, CurrencyInfo};
-
 mod operation;
-use operation::get_balance;
-
 mod commands;
-use commands::get_balance_command;
 
 
 

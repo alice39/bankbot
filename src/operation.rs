@@ -1,5 +1,5 @@
-use crate::Currency;
-use crate::currency::CurrencyInfo;
+// use crate::Currency;
+use crate::currency::{Currency, CurrencyInfo};
 use sqlx::Connection;
 use sqlx::SqliteConnection;
 use sqlx::Executor;

@@ -1,3 +1,4 @@
+use crate::currency;
 use crate::currency::{Currency, ALL_CURRENCY, CurrencyInfo};
 use crate::operation::{TransferStatus, get_balance, send_transfer};
 
