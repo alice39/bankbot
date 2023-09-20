@@ -141,3 +141,26 @@ pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Curren
 	conn.execute(query).await.unwrap();
 	return TransferStatus::Authorized;
 }
+
+pub async fn force_transfer(from_account: i64, to_account: i64, currency: &Currency, value: i64) {
+	let currency_info = CurrencyInfo::new(&currency);
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+
+	let before_from_balance = get_balance(from_account, &currency).await;
+	let before_to_balance = get_balance(to_account, &currency).await;
+
+	let after_from_balance = before_from_balance - value;
+	let after_to_balance = before_to_balance + value;
+	let timestamp_now = get_current_time();
+
+	let query = sqlx::query("INSERT INTO Transfer (transfer_date, from_account, to_account, from_balance, to_balance, currency, value) VALUES (?, ?, ?, ?, ?, ?, ?)")
+		.bind(timestamp_now)
+		.bind(from_account)
+		.bind(to_account)
+		.bind(after_from_balance)
+		.bind(after_to_balance)
+		.bind(currency_info.code)
+		.bind(value);
+
+	conn.execute(query).await.unwrap();
+}
