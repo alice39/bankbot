@@ -31,6 +31,10 @@ impl EventHandler for Handler {
 		if msg.content.starts_with("!transfer") {
 			commands::transfer_command(&ctx, &msg).await;
 		}
+
+		if msg.content.starts_with("!statement") {
+			commands::get_statement_command(&ctx, &msg).await;
+		}
 	}
 
 	async fn ready(&self, _: Context, ready: Ready) {

@@ -1,11 +1,22 @@
 use crate::currency;
 use crate::currency::{Currency, ALL_CURRENCY, CurrencyInfo};
-use crate::operation::{TransferStatus, get_balance, send_transfer};
+use crate::operation::{TransferStatus, get_balance, send_transfer, get_statement};
 
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
+
+fn get_currency_from_str(word : &str) -> Option<Currency> {
+	for c in ALL_CURRENCY.iter() {
+		let info = CurrencyInfo::new(&c);
+		if word == info.code {
+			return Some(*c);
+		}
+	}
+
+	return None;
+}
 
 async fn send_simple_message(response : String, ctx: &Context, msg: &Message) {
 	msg.channel_id.send_message(&ctx.http, |m|
@@ -42,6 +53,66 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) {
 			e.title("Balance")
 				.description(response)
 				.thumbnail(image)
+		})
+	}).await;
+}
+
+
+pub async fn get_statement_command(ctx: &Context, msg: &Message) {
+	let mut got_currency = false;
+	let mut currency = Currency::KSN;
+	let split_iterator = msg.content.split(" ");
+	for word in split_iterator {
+		if let Some(c) = get_currency_from_str(word) {
+			currency = c;
+			got_currency = true;
+			break;
+		}
+	}
+
+	if got_currency == false {
+		let response = String::from("Please specify a currency.");
+		send_simple_message(response, &ctx, &msg).await;
+		return;
+	}
+
+	let info = CurrencyInfo::new(&currency);
+	let account = *msg.author.id.as_u64() as i64;
+	let statement = get_statement(account, currency).await;
+	let mut overall_balance : f64 = 0.00;
+	
+	let mut counter = 0;
+	let mut response : String = String::from("");
+	for transfer in statement {
+		let balance : f32 = (transfer.balance as f32) * f32::powf(10.0, info.subunitexp as f32);
+		let value : f32 = (transfer.value as f32) * f32::powf(10.0, info.subunitexp as f32);
+		if counter == 0 { overall_balance = 0.00; }
+
+		response.push_str(&format!("Date: `{}`\n", transfer.date));
+		response.push_str(&format!("Balance: `{} {:.2}`. Operation: `{} {:.2}`\n", info.code, balance, info.code, value));
+		if transfer.from_account == account {
+			response.push_str(&format!("Transfer sent to <@!{}>\n", transfer.to_account));
+		} else if transfer.from_account != 0 {
+			response.push_str(&format!("Transfer received from <@!{}>\n", transfer.from_account));
+		} else {
+			response.push_str("Deposit received.\n");
+		}
+	
+		response.push_str("\n");
+		counter += 1;
+		if counter > 10 {  break; }
+	}
+
+	if counter == 0 {
+		response = String::from("There are no transactions to report.");
+	}
+
+	msg.channel_id.send_message(&ctx.http, |m|
+	{
+		m.embed(|e| {
+			e.title(format!("{}: {} {:.2}", info.name, info.code, overall_balance))
+				.description(response)
+				.thumbnail(info.picture)
 		})
 	}).await;
 }
@@ -94,12 +165,9 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 		}
 
 		if got_currency == false {
-			for c in ALL_CURRENCY.iter() {
-				let info = CurrencyInfo::new(&c);
-				if word == info.code {
-					currency = *c;
-					got_currency = true;
-				}
+			if let Some(c) = get_currency_from_str(word) {
+				got_currency = true;
+				currency = c;
 			}
 		}
 
