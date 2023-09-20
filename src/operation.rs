@@ -9,12 +9,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use futures::TryStreamExt;
 // use futures_util::stream::try_stream::TryStreamExt;
 
+#[derive(Debug)]
 pub struct Transfer {
-	pub date : i64,
+	pub currency : Currency,
 	pub from_account : i64,
 	pub to_account : i64,	
-	pub currency : Currency,
+	pub balance : i64,
 	pub value : i64,
+	pub date : i64,
 }
 
 fn get_current_time() -> i64 {
@@ -65,8 +67,42 @@ pub async fn get_balance(account: i64, currency: &Currency) -> i64 {
 	return balance;
 }
 
-fn get_statement(from_account: i64, currency: Currency, entries: i64) {
+pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
+	let currency_info = CurrencyInfo::new(&currency);
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+	let mut rows = sqlx::query(
+		"SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC"
+	)
+		.bind(currency_info.code)
+		.bind(account)
+		.bind(account)
+		.fetch_all(&mut conn);
 
+	let mut result : Vec<Transfer> = vec![];
+	if let Ok(rows) = rows.await {
+		for row in rows.iter() {
+			let date : i64 = row.try_get("transfer_date").unwrap();
+			let value : i64 = row.try_get("value").unwrap();
+			let from_account : i64 = row.try_get("from_account").unwrap();
+			let to_account : i64 = row.try_get("to_account").unwrap();
+			let balance : i64 = if from_account == account {
+				row.try_get("from_balance").unwrap()
+			} else {
+				row.try_get("to_balance").unwrap()
+			};
+
+			result.push( Transfer {
+				currency,
+				from_account,
+				to_account,
+				balance,
+				value,
+				date,
+			});
+		}
+	}
+
+	return result;
 }
 
 #[derive(Debug)]
