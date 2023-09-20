@@ -79,14 +79,14 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 	let info = CurrencyInfo::new(&currency);
 	let account = *msg.author.id.as_u64() as i64;
 	let statement = get_statement(account, currency).await;
-	let mut overall_balance : f64 = 0.00;
+	let mut overall_balance : f32 = 0.00;
 	
 	let mut counter = 0;
 	let mut response : String = String::from("");
 	for transfer in statement {
 		let balance : f32 = (transfer.balance as f32) * f32::powf(10.0, info.subunitexp as f32);
 		let value : f32 = (transfer.value as f32) * f32::powf(10.0, info.subunitexp as f32);
-		if counter == 0 { overall_balance = 0.00; }
+		if counter == 0 { overall_balance = balance; }
 
 		response.push_str(&format!("Date: `{}`\n", transfer.date));
 		response.push_str(&format!("Balance: `{} {:.2}`. Operation: `{} {:.2}`\n", info.code, balance, info.code, value));
