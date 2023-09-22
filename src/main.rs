@@ -54,7 +54,7 @@ impl EventHandler for Handler {
 async fn main() {
 	dotenv().ok();
 
-	let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment.");
+	let token = env::var("BANK_DISCORD_TOKEN").expect("Expected a token in the environment.");
 	let director_id = env::var("DIRECTOR_ID").expect("Expected an admin ID.");
 	let director_id = director_id.parse::<u64>().expect("Expected an integer admin ID.");
 
