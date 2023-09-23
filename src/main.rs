@@ -21,24 +21,34 @@ impl EventHandler for Handler {
 			if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
 				println!("Error sending message: {:?}", why);
 			}
+
+			return;
 		}
 
-		if msg.content.starts_with("!balance") {
-			commands::get_balance_command(&ctx, &msg).await.ok();
-		}
-
-		if msg.content.starts_with("!transfer") {
+		let error = if msg.content.starts_with("!balance") {
+			commands::get_balance_command(&ctx, &msg).await.err()
+		} else if msg.content.starts_with("!transfer") {
 			commands::transfer_command(&ctx, &msg).await;
-		}
-
-		if msg.content.starts_with("!statement") {
+			None
+		} else if msg.content.starts_with("!statement") {
 			commands::get_statement_command(&ctx, &msg).await;
-		}
-
-		if msg.content.starts_with("!create") {
+			None
+		} else if msg.content.starts_with("!create") {
 			if *msg.author.id.as_u64() == self.director_id {
 				commands::create_deposit_command(&ctx, &msg).await;
 			}
+			None
+		} else {
+			None
+		};
+
+		if let Some(err) = error {
+			msg.channel_id
+				.say(&ctx.http, "> Critical Error!")
+				.await
+				.ok();
+
+			println!("Error while executing: {}: {}", msg.content, err);
 		}
 	}
 
