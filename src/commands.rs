@@ -1,10 +1,7 @@
-use crate::currency;
 use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCY};
 use crate::operation::{force_transfer, get_balance, get_statement, send_transfer, TransferStatus};
 
-use serenity::async_trait;
 use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
 fn get_currency_from_str(word: &str) -> Option<Currency> {
@@ -18,10 +15,11 @@ fn get_currency_from_str(word: &str) -> Option<Currency> {
 	return None;
 }
 
-async fn send_simple_message(response: String, ctx: &Context, msg: &Message) {
+async fn send_simple_message(response: &str, ctx: &Context, msg: &Message) {
 	msg.channel_id
 		.send_message(&ctx.http, |m| m.embed(|e| e.description(response)))
-		.await;
+		.await
+		.ok();
 }
 
 pub async fn get_balance_command(ctx: &Context, msg: &Message) {
@@ -48,7 +46,8 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) {
 		.send_message(&ctx.http, |m| {
 			m.embed(|e| e.title("Balance").description(response).thumbnail(image))
 		})
-		.await;
+		.await
+		.ok();
 }
 
 pub async fn get_statement_command(ctx: &Context, msg: &Message) {
@@ -64,8 +63,7 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 	}
 
 	if got_currency == false {
-		let response = String::from("Please specify a currency.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message("Please specify a currency.", &ctx, &msg).await;
 		return;
 	}
 
@@ -121,37 +119,42 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 				.thumbnail(info.picture)
 			})
 		})
-		.await;
+		.await
+		.ok();
 }
 
 pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	let mentions_vector = &msg.mentions;
-	let mut response: String = String::from("Not implemented.");
 
 	if mentions_vector.len() == 0 {
-		response = String::from("Please ping the individual you want to transfer.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"Please ping the individual you want to transfer.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
 	if mentions_vector.len() != 1 {
-		response =
-			String::from("You cannot transfer multiple times. Only a single transfer is allowed.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"You cannot transfer multiple times. Only a single transfer is allowed.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
 	if mentions_vector[0].bot == true {
-		response = String::from("You cannot transfer to bots.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message("You cannot transfer to bots.", &ctx, &msg).await;
 		return;
 	}
 
 	let to_account = *mentions_vector[0].id.as_u64() as i64;
 	let from_account = *msg.author.id.as_u64() as i64;
 	if to_account == from_account {
-		response = String::from("You cannot transfer to yourself.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message("You cannot transfer to yourself.", &ctx, &msg).await;
 		return;
 	}
 
@@ -187,14 +190,22 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	}
 
 	if got_currency == false {
-		response = String::from("Currency has not been detected. Specify a currency.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"Currency has not been detected. Specify a currency.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
 	if got_value == false {
-		response = String::from("A value has not been detected. Specify which value to transfer.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"A value has not been detected. Specify which value to transfer.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
@@ -205,36 +216,33 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 
 	// Check for positiveness.
 	if integer_value <= 0 {
-		response = String::from("Please insert a positive value.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message("Please insert a positive value.", &ctx, &msg).await;
 		return;
 	}
 
 	// Make the transfer!
 	let transfer_status = send_transfer(from_account, to_account, &currency, integer_value).await;
 
-	match transfer_status {
-		TransferStatus::Authorized => response = String::from("Transfer authorized."),
-		TransferStatus::InsuficientBalance => {
-			response = String::from("Insuficient balance for this transfer.")
-		}
-		TransferStatus::BadValue => response = String::from("Inserted value is bad."),
-		TransferStatus::Unauthorized => {
-			response = String::from("The transfer was not authorized, and blocked.")
-		}
-	}
+	let status_response = match transfer_status {
+		TransferStatus::Authorized => "Transfer authorized.",
+		TransferStatus::InsuficientBalance => "Insuficient balance for this transfer.",
+		TransferStatus::BadValue => "Inserted value is bad.",
+		TransferStatus::Unauthorized => "The transfer was not authorized, and blocked.",
+	};
 
-	send_simple_message(response, &ctx, &msg).await;
+	send_simple_message(status_response, &ctx, &msg).await;
 }
 
 pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	let mentions_vector = &msg.mentions;
-	let mut response: String = String::from("Not implemented.");
 
 	if mentions_vector.len() >= 2 {
-		response =
-			String::from("You cannot transfer multiple times. Only a single transfer is allowed.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"You cannot transfer multiple times. Only a single transfer is allowed.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
@@ -243,8 +251,7 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 		*msg.author.id.as_u64() as i64
 	} else {
 		if mentions_vector[0].bot == true {
-			response = String::from("You cannot transfer to bots.");
-			send_simple_message(response, &ctx, &msg).await;
+			send_simple_message("You cannot transfer to bots.", &ctx, &msg).await;
 			return;
 		}
 
@@ -284,14 +291,22 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	}
 
 	if got_currency == false {
-		response = String::from("Currency has not been detected. Specify a currency.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"Currency has not been detected. Specify a currency.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
 	if got_value == false {
-		response = String::from("A value has not been detected. Specify which value to transfer.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message(
+			"A value has not been detected. Specify which value to transfer.",
+			&ctx,
+			&msg,
+		)
+		.await;
 		return;
 	}
 
@@ -302,14 +317,12 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 
 	// Check if it is zero.
 	if integer_value == 0 {
-		response = String::from("Please select a non-zero value.");
-		send_simple_message(response, &ctx, &msg).await;
+		send_simple_message("Please select a non-zero value.", &ctx, &msg).await;
 		return;
 	}
 
 	// Create deposit.
 	force_transfer(0, target_id, &currency, integer_value).await;
 
-	response = String::from("**Central:** Operation Authorized.");
-	send_simple_message(response, &ctx, &msg).await;
+	send_simple_message("**Central:** Operation Authorized.", &ctx, &msg).await;
 }

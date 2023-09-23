@@ -69,9 +69,8 @@ pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
 		.await
 		.unwrap();
-	let mut rows = sqlx::query(
-		"SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC"
-	)
+
+	let rows = sqlx::query("SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC")
 		.bind(currency_info.code)
 		.bind(account)
 		.bind(account)
