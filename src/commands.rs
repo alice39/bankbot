@@ -1,11 +1,10 @@
+use serenity::model::channel::Message;
+use serenity::prelude::*;
 use std::borrow::Cow;
 
 use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCIES};
 use crate::operation::{force_transfer, get_balance, get_statement, send_transfer, TransferStatus};
 use crate::stat;
-
-use serenity::model::channel::Message;
-use serenity::prelude::*;
 
 async fn send_simple_message(response: &str, ctx: &Context, msg: &Message) {
 	msg.channel_id
@@ -105,7 +104,7 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result
 	Ok(())
 }
 
-pub async fn get_statement_command(ctx: &Context, msg: &Message) {
+pub async fn get_statement_command(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 	let currency = msg
 		.content
 		.split_whitespace()
@@ -115,13 +114,13 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 		Some(currency) => currency,
 		None => {
 			send_simple_message("Please specify a currency.", ctx, msg).await;
-			return;
+			return Ok(());
 		}
 	};
 
 	let info = CurrencyInfo::from(currency);
 	let account = *msg.author.id.as_u64() as i64;
-	let statement = get_statement(account, currency).await;
+	let statement = get_statement(account, currency).await?;
 	let mut overall_balance: f32 = 0.00;
 
 	let mut counter = 0;
@@ -173,6 +172,8 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 		})
 		.await
 		.ok();
+
+	Ok(())
 }
 
 pub async fn transfer_command(ctx: &Context, msg: &Message) {

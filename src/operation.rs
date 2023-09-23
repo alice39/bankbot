@@ -1,12 +1,7 @@
-use crate::currency::{Currency, CurrencyInfo};
-use sqlx::Connection;
-use sqlx::Executor;
-use sqlx::Row;
-use sqlx::SqliteConnection;
+use sqlx::{Connection, Executor, SqliteConnection};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use futures::TryStreamExt;
-// use futures_util::stream::try_stream::TryStreamExt;
+use crate::currency::{Currency, CurrencyInfo};
 
 #[derive(Debug)]
 pub struct Transfer {
@@ -17,6 +12,23 @@ pub struct Transfer {
 	pub value: i64,
 	pub date: i64,
 }
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct TransferRow {
+	pub id: u32,
+	pub currency: String,
+	pub from_account: UserId,
+	pub to_account: UserId,
+	pub from_balance: i64,
+	pub to_balance: i64,
+	pub value: i64,
+	pub transfer_date: i64,
+	pub description: String,
+}
+
+pub type UserId = i64;
+
+pub const BANK_ID: UserId = 0;
 
 fn get_current_time() -> i64 {
 	let start = SystemTime::now();
@@ -31,66 +43,42 @@ pub async fn get_balance(account: i64, currency: Currency) -> anyhow::Result<i64
 	let currency_info = CurrencyInfo::from(currency);
 
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let mut rows = sqlx::query("SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC")
-		.bind(currency_info.code)
-		.bind(account)
-		.bind(account)
-		.fetch(&mut conn);
+	let transfer_row = sqlx::query_as::<_, TransferRow>(
+		r#"SELECT * FROM Transfer
+		WHERE currency=? AND (from_account=? OR to_account=?)
+		ORDER BY id DESC"#,
+	)
+	.bind(currency_info.code)
+	.bind(account)
+	.bind(account)
+	.fetch_optional(&mut conn)
+	.await?;
 
-	let row = match rows.try_next().await? {
-		Some(row) => row,
-		None => return Ok(0),
-	};
-
-	let from_account: i64 = row.try_get("from_account")?;
-	let to_account: i64 = row.try_get("to_account")?;
-
-	Ok(if account == from_account {
-		row.try_get("from_balance")?
-	} else if account == to_account {
-		row.try_get("to_balance")?
-	} else {
-		0
+	Ok(match transfer_row {
+		Some(row) => Transfer::try_from((account, row))?.balance,
+		None => 0,
 	})
 }
 
-pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
+pub async fn get_statement(account: i64, currency: Currency) -> anyhow::Result<Vec<Transfer>> {
 	let currency_info = CurrencyInfo::from(currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
-		.await
-		.unwrap();
 
-	let rows = sqlx::query("SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC")
-		.bind(currency_info.code)
-		.bind(account)
-		.bind(account)
-		.fetch_all(&mut conn);
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
+	let transfer_rows = sqlx::query_as::<_, TransferRow>(
+		r#"SELECT * FROM Transfer
+		WHERE currency=? AND (from_account=? OR to_account=?)
+		ORDER BY id DESC"#,
+	)
+	.bind(currency_info.code)
+	.bind(account)
+	.bind(account)
+	.fetch_all(&mut conn)
+	.await?;
 
-	let mut result: Vec<Transfer> = vec![];
-	if let Ok(rows) = rows.await {
-		for row in rows.iter() {
-			let date: i64 = row.try_get("transfer_date").unwrap();
-			let value: i64 = row.try_get("value").unwrap();
-			let from_account: i64 = row.try_get("from_account").unwrap();
-			let to_account: i64 = row.try_get("to_account").unwrap();
-			let balance: i64 = if from_account == account {
-				row.try_get("from_balance").unwrap()
-			} else {
-				row.try_get("to_balance").unwrap()
-			};
-
-			result.push(Transfer {
-				currency,
-				from_account,
-				to_account,
-				balance,
-				value,
-				date,
-			});
-		}
-	}
-
-	result
+	Ok(transfer_rows
+		.into_iter()
+		.filter_map(|row| Transfer::try_from((account, row)).ok())
+		.collect())
 }
 
 #[derive(Debug)]
@@ -134,14 +122,18 @@ pub async fn send_transfer(
 	let after_to_balance = before_to_balance + value;
 	let timestamp_now = get_current_time();
 
-	let query = sqlx::query("INSERT INTO Transfer (transfer_date, from_account, to_account, from_balance, to_balance, currency, value) VALUES (?, ?, ?, ?, ?, ?, ?)")
-		.bind(timestamp_now)
-		.bind(from_account)
-		.bind(to_account)
-		.bind(after_from_balance)
-		.bind(after_to_balance)
-		.bind(currency_info.code)
-		.bind(value);
+	let query = sqlx::query(
+		r#"INSERT INTO Transfer
+		(transfer_date, from_account, to_account, from_balance, to_balance, currency, value)
+		VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+	)
+	.bind(timestamp_now)
+	.bind(from_account)
+	.bind(to_account)
+	.bind(after_from_balance)
+	.bind(after_to_balance)
+	.bind(currency_info.code)
+	.bind(value);
 
 	match conn.execute(query).await {
 		Ok(_) => TransferStatus::Authorized,
@@ -165,16 +157,49 @@ pub async fn force_transfer(
 	let after_to_balance = before_to_balance + value;
 	let timestamp_now = get_current_time();
 
-	let query = sqlx::query("INSERT INTO Transfer (transfer_date, from_account, to_account, from_balance, to_balance, currency, value) VALUES (?, ?, ?, ?, ?, ?, ?)")
-		.bind(timestamp_now)
-		.bind(from_account)
-		.bind(to_account)
-		.bind(after_from_balance)
-		.bind(after_to_balance)
-		.bind(currency_info.code)
-		.bind(value);
+	let query = sqlx::query(
+		r#"INSERT INTO Transfer
+		(transfer_date, from_account, to_account, from_balance, to_balance, currency, value)
+		VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+	)
+	.bind(timestamp_now)
+	.bind(from_account)
+	.bind(to_account)
+	.bind(after_from_balance)
+	.bind(after_to_balance)
+	.bind(currency_info.code)
+	.bind(value);
 
 	conn.execute(query).await?;
 
 	Ok(())
+}
+
+impl TryFrom<(UserId, TransferRow)> for Transfer {
+	type Error = anyhow::Error;
+
+	fn try_from((id, row): (UserId, TransferRow)) -> Result<Self, Self::Error> {
+		Ok(Self {
+			currency: Currency::try_from(row.currency.as_str())?,
+			from_account: row.from_account,
+			to_account: row.to_account,
+			balance: if row.from_account == id {
+				row.from_balance
+			} else if row.to_account == id {
+				row.to_balance
+			} else {
+				0
+			},
+			value: row.value,
+			date: row.transfer_date,
+		})
+	}
+}
+
+impl TryFrom<(TransferRow, UserId)> for Transfer {
+	type Error = anyhow::Error;
+
+	fn try_from((row, id): (TransferRow, UserId)) -> Result<Self, Self::Error> {
+		(id, row).try_into()
+	}
 }
