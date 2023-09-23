@@ -1,2 +1,5 @@
-bank_database.db
+target/
+
 .env
+bank_database.db
+Cargo.lock
