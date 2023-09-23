@@ -1,5 +1,7 @@
 use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCIES};
 use crate::operation::{force_transfer, get_balance, get_statement, send_transfer, TransferStatus};
+use crate::stat;
+use crate::stat::Tendency;
 
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -9,6 +11,46 @@ async fn send_simple_message(response: &str, ctx: &Context, msg: &Message) {
 		.send_message(&ctx.http, |m| m.embed(|e| e.description(response)))
 		.await
 		.ok();
+}
+
+pub async fn get_stat_command(ctx: &Context, msg: &Message) {
+	let currency = msg
+		.content
+		.split_whitespace()
+		.find_map(|word| Currency::try_from(word).ok());
+
+	let currency = match currency {
+		Some(currency) => currency,
+		None => {
+			send_simple_message("Please specify a currency.", &ctx, &msg).await;
+			return;
+		}
+	};
+
+	let supply = stat::get_money_supply(currency).await.unwrap() as f64;
+	let transfers = stat::get_all_transfers(currency).await.unwrap() as f64;
+	let tendency = stat::calc_balances(&stat::get_all_balances(currency).await.unwrap());
+	let info = CurrencyInfo::from(currency);
+	let factor = f64::powf(10.0, info.subunitexp as f64);
+
+	let response = format!(
+		"Money Supply: `{} {:.02}`
+		GDP: `{} {:.02}`
+		GINI: `{:.02}`
+		Median: `{} {:.02}`
+		Average: `{} {:.02}`",
+		info.code,
+		supply * factor,
+		info.code,
+		transfers * factor,
+		tendency.gini,
+		info.code,
+		tendency.median * factor,
+		info.code,
+		tendency.average * factor
+	);
+
+	send_simple_message(&response, ctx, msg).await;
 }
 
 pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result<()> {

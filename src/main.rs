@@ -9,6 +9,7 @@ use serenity::prelude::*;
 mod commands;
 mod currency;
 mod operation;
+mod stat;
 
 struct Handler {
 	director_id: u64,
@@ -32,6 +33,9 @@ impl EventHandler for Handler {
 			None
 		} else if msg.content.starts_with("!statement") {
 			commands::get_statement_command(&ctx, &msg).await;
+			None
+		} else if msg.content.starts_with("!stat ") {
+			commands::get_stat_command(&ctx, &msg).await;
 			None
 		} else if msg.content.starts_with("!create") {
 			if *msg.author.id.as_u64() == self.director_id {
