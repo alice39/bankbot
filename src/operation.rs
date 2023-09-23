@@ -24,10 +24,7 @@ fn get_current_time() -> i64 {
 		.duration_since(UNIX_EPOCH)
 		.expect("Time went backwards");
 
-	let timestamp =
-		since_the_epoch.as_secs() as i64 * 1000 + since_the_epoch.subsec_nanos() as i64 / 1_000_000;
-
-	return timestamp;
+	since_the_epoch.as_secs() as i64 * 1000 + since_the_epoch.subsec_nanos() as i64 / 1_000_000
 }
 
 pub async fn get_balance(account: i64, currency: Currency) -> anyhow::Result<i64> {
@@ -93,7 +90,7 @@ pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
 		}
 	}
 
-	return result;
+	result
 }
 
 #[derive(Debug)]

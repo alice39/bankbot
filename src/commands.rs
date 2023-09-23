@@ -23,7 +23,7 @@ pub async fn get_stat_command(ctx: &Context, msg: &Message) {
 	let currency = match currency {
 		Some(currency) => currency,
 		None => {
-			send_simple_message("Please specify a currency.", &ctx, &msg).await;
+			send_simple_message("Please specify a currency.", ctx, msg).await;
 			return;
 		}
 	};
@@ -114,7 +114,7 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 	let currency = match currency {
 		Some(currency) => currency,
 		None => {
-			send_simple_message("Please specify a currency.", &ctx, &msg).await;
+			send_simple_message("Please specify a currency.", ctx, msg).await;
 			return;
 		}
 	};
@@ -149,7 +149,7 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 			response.push_str("Deposit received.\n");
 		}
 
-		response.push_str("\n");
+		response.push('\n');
 		counter += 1;
 		if counter > 10 {
 			break;
@@ -178,88 +178,75 @@ pub async fn get_statement_command(ctx: &Context, msg: &Message) {
 pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	let mentions_vector = &msg.mentions;
 
-	if mentions_vector.len() == 0 {
-		send_simple_message(
-			"Please ping the individual you want to transfer.",
-			&ctx,
-			&msg,
-		)
-		.await;
+	if mentions_vector.is_empty() {
+		send_simple_message("Please ping the individual you want to transfer.", ctx, msg).await;
 		return;
 	}
 
-	if mentions_vector.len() != 1 {
+	if mentions_vector.len() > 1 {
 		send_simple_message(
 			"You cannot transfer multiple times. Only a single transfer is allowed.",
-			&ctx,
-			&msg,
+			ctx,
+			msg,
 		)
 		.await;
 		return;
 	}
 
-	if mentions_vector[0].bot == true {
-		send_simple_message("You cannot transfer to bots.", &ctx, &msg).await;
+	if mentions_vector[0].bot {
+		send_simple_message("You cannot transfer to bots.", ctx, msg).await;
 		return;
 	}
 
 	let to_account = *mentions_vector[0].id.as_u64() as i64;
 	let from_account = *msg.author.id.as_u64() as i64;
 	if to_account == from_account {
-		send_simple_message("You cannot transfer to yourself.", &ctx, &msg).await;
+		send_simple_message("You cannot transfer to yourself.", ctx, msg).await;
 		return;
 	}
 
-	let split_iterator = msg.content.split(" ");
-	let mut currency: Currency = Currency::Ksn;
-	let mut got_currency = false;
-
-	let mut value: f64 = 0.0;
-	let mut got_value = false;
+	let split_iterator = msg.content.split_whitespace();
+	let mut currency: Option<Currency> = None;
+	let mut value: Option<f64> = None;
 
 	for word in split_iterator {
-		if got_value == false {
-			let try_parse = word.parse::<f64>();
-			match try_parse {
-				Ok(v) => {
-					value = v;
-					got_value = true;
-				}
-				Err(_) => got_value = false,
-			}
+		if currency.is_none() {
+			currency = Currency::try_from(word).ok();
+		}
+		if value.is_none() {
+			value = word.parse::<f64>().ok();
 		}
 
-		if got_currency == false {
-			if let Ok(c) = Currency::try_from(word) {
-				got_currency = true;
-				currency = c;
-			}
-		}
-
-		if got_value == true && got_currency == true {
+		if currency.is_some() && value.is_some() {
 			break;
 		}
 	}
 
-	if got_currency == false {
-		send_simple_message(
-			"Currency has not been detected. Specify a currency.",
-			&ctx,
-			&msg,
-		)
-		.await;
-		return;
-	}
+	let currency = match currency {
+		Some(currency) => currency,
+		None => {
+			send_simple_message(
+				"Currency has not been detected. Specify a currency.",
+				ctx,
+				msg,
+			)
+			.await;
+			return;
+		}
+	};
 
-	if got_value == false {
-		send_simple_message(
-			"A value has not been detected. Specify which value to transfer.",
-			&ctx,
-			&msg,
-		)
-		.await;
-		return;
-	}
+	let value = match value {
+		Some(value) => value,
+		None => {
+			send_simple_message(
+				"A value has not been detected. Specify which value to transfer.",
+				ctx,
+				msg,
+			)
+			.await;
+			return;
+		}
+	};
 
 	// Treat value.
 	let exp = CurrencyInfo::from(currency).subunitexp as f64;
@@ -268,7 +255,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 
 	// Check for positiveness.
 	if integer_value <= 0 {
-		send_simple_message("Please insert a positive value.", &ctx, &msg).await;
+		send_simple_message("Please insert a positive value.", ctx, msg).await;
 		return;
 	}
 
@@ -282,7 +269,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 		TransferStatus::Failed => "The transfer was not authorized, and blocked.",
 	};
 
-	send_simple_message(status_response, &ctx, &msg).await;
+	send_simple_message(status_response, ctx, msg).await;
 }
 
 pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
@@ -291,19 +278,19 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	if mentions_vector.len() >= 2 {
 		send_simple_message(
 			"You cannot transfer multiple times. Only a single transfer is allowed.",
-			&ctx,
-			&msg,
+			ctx,
+			msg,
 		)
 		.await;
 		return;
 	}
 
 	// Find target.
-	let target_id: i64 = if mentions_vector.len() == 0 {
+	let target_id: i64 = if mentions_vector.is_empty() {
 		*msg.author.id.as_u64() as i64
 	} else {
-		if mentions_vector[0].bot == true {
-			send_simple_message("You cannot transfer to bots.", &ctx, &msg).await;
+		if mentions_vector[0].bot {
+			send_simple_message("You cannot transfer to bots.", ctx, msg).await;
 			return;
 		}
 
@@ -311,56 +298,49 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	};
 
 	// Find currency and value.
-	let split_iterator = msg.content.split(" ");
-	let mut currency: Currency = Currency::Ksn;
-	let mut got_currency = false;
+	let split_iterator = msg.content.split_whitespace();
 
-	let mut value: f64 = 0.0;
-	let mut got_value = false;
+	let mut currency: Option<Currency> = None;
+	let mut value: Option<f64> = None;
 
 	for word in split_iterator {
-		if got_value == false {
-			let try_parse = word.parse::<f64>();
-			match try_parse {
-				Ok(v) => {
-					value = v;
-					got_value = true;
-				}
-				Err(_) => got_value = false,
-			}
+		if currency.is_none() {
+			currency = Currency::try_from(word).ok();
+		}
+		if value.is_none() {
+			value = word.parse().ok();
 		}
 
-		if got_currency == false {
-			if let Ok(c) = Currency::try_from(word) {
-				got_currency = true;
-				currency = c;
-			}
-		}
-
-		if got_value == true && got_currency == true {
+		if value.is_some() && currency.is_some() {
 			break;
 		}
 	}
 
-	if got_currency == false {
-		send_simple_message(
-			"Currency has not been detected. Specify a currency.",
-			&ctx,
-			&msg,
-		)
-		.await;
-		return;
-	}
+	let currency = match currency {
+		Some(currency) => currency,
+		None => {
+			send_simple_message(
+				"Currency has not been detected. Specify a currency.",
+				ctx,
+				msg,
+			)
+			.await;
+			return;
+		}
+	};
 
-	if got_value == false {
-		send_simple_message(
-			"A value has not been detected. Specify which value to transfer.",
-			&ctx,
-			&msg,
-		)
-		.await;
-		return;
-	}
+	let value = match value {
+		Some(value) => value,
+		None => {
+			send_simple_message(
+				"A value has not been detected. Specify which value to transfer.",
+				ctx,
+				msg,
+			)
+			.await;
+			return;
+		}
+	};
 
 	// Treat value.
 	let exp = CurrencyInfo::from(currency).subunitexp as f64;
@@ -369,13 +349,13 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 
 	// Check if it is zero.
 	if integer_value == 0 {
-		send_simple_message("Please select a non-zero value.", &ctx, &msg).await;
+		send_simple_message("Please select a non-zero value.", ctx, msg).await;
 		return;
 	}
 
 	// Create deposit.
 	match force_transfer(0, target_id, currency, integer_value).await {
-		Ok(_) => send_simple_message("**Central:** Operation Authorized.", &ctx, &msg).await,
-		Err(_) => send_simple_message("**Central:** Operation failed", &ctx, &msg).await,
+		Ok(_) => send_simple_message("**Central:** Operation Authorized.", ctx, msg).await,
+		Err(_) => send_simple_message("**Central:** Operation failed", ctx, msg).await,
 	};
 }

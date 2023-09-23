@@ -1,16 +1,16 @@
 use std::borrow::Cow;
 
 macro_rules! generate_currency {
-    ($enum_name:ident { $($elements:ident),* }, $array_name:ident) => {
+	($enum_name:ident { $($elements:ident),* }, $array_name:ident) => {
 		#[derive(Debug, Clone, Copy)]
-        pub enum $enum_name {
-            $($elements),*
-        }
+		pub enum $enum_name {
+			$($elements),*
+		}
 
-        pub const $array_name: &[$enum_name] = &[
-            $($enum_name::$elements),*
-        ];
-    };
+		pub const $array_name: &[$enum_name] = &[
+			$($enum_name::$elements),*
+		];
+	};
 }
 
 generate_currency!(
