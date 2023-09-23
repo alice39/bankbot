@@ -40,6 +40,10 @@ impl TryFrom<&str> for Currency {
 	type Error = anyhow::Error;
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
+		if value.len() != 3 {
+			anyhow::bail!("No matching currency");
+		}
+
 		match &value.to_uppercase()[0..3] {
 			"KSN" => Ok(Self::Ksn),
 			"USD" => Ok(Self::Usd),
