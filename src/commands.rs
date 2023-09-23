@@ -1,19 +1,8 @@
-use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCY};
+use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCIES};
 use crate::operation::{force_transfer, get_balance, get_statement, send_transfer, TransferStatus};
 
 use serenity::model::channel::Message;
 use serenity::prelude::*;
-
-fn get_currency_from_str(word: &str) -> Option<Currency> {
-	for c in ALL_CURRENCY.iter() {
-		let info = CurrencyInfo::new(&c);
-		if word == info.code {
-			return Some(*c);
-		}
-	}
-
-	return None;
-}
 
 async fn send_simple_message(response: &str, ctx: &Context, msg: &Message) {
 	msg.channel_id
@@ -28,11 +17,11 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result
 	let mut response: String = String::from("");
 	let image = "https://cdn.discordapp.com/attachments/1153482364907962509/1153482411871584267/currency_dollar_blue.png";
 
-	for currency in ALL_CURRENCY.iter() {
+	for &currency in ALL_CURRENCIES {
 		let balance = get_balance(author_id, currency).await?;
 
 		if balance != 0 {
-			let info = CurrencyInfo::new(currency);
+			let info = CurrencyInfo::from(currency);
 			let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
 			response = format!("`{} {:.02}`", &info.code, balance);
 			found = true;
@@ -55,23 +44,20 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result
 }
 
 pub async fn get_statement_command(ctx: &Context, msg: &Message) {
-	let mut got_currency = false;
-	let mut currency = Currency::KSN;
-	let split_iterator = msg.content.split(" ");
-	for word in split_iterator {
-		if let Some(c) = get_currency_from_str(word) {
-			currency = c;
-			got_currency = true;
-			break;
+	let currency = msg
+		.content
+		.split_whitespace()
+		.find_map(|word| Currency::try_from(word).ok());
+
+	let currency = match currency {
+		Some(currency) => currency,
+		None => {
+			send_simple_message("Please specify a currency.", &ctx, &msg).await;
+			return;
 		}
-	}
+	};
 
-	if got_currency == false {
-		send_simple_message("Please specify a currency.", &ctx, &msg).await;
-		return;
-	}
-
-	let info = CurrencyInfo::new(&currency);
+	let info = CurrencyInfo::from(currency);
 	let account = *msg.author.id.as_u64() as i64;
 	let statement = get_statement(account, currency).await;
 	let mut overall_balance: f32 = 0.00;
@@ -163,7 +149,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	}
 
 	let split_iterator = msg.content.split(" ");
-	let mut currency: Currency = Currency::KSN;
+	let mut currency: Currency = Currency::Ksn;
 	let mut got_currency = false;
 
 	let mut value: f64 = 0.0;
@@ -182,7 +168,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 		}
 
 		if got_currency == false {
-			if let Some(c) = get_currency_from_str(word) {
+			if let Ok(c) = Currency::try_from(word) {
 				got_currency = true;
 				currency = c;
 			}
@@ -214,7 +200,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	}
 
 	// Treat value.
-	let exp = CurrencyInfo::new(&currency).subunitexp as f64;
+	let exp = CurrencyInfo::from(currency).subunitexp as f64;
 	let inter_value = f64::floor(value * f64::powf(10.0, -exp));
 	let integer_value: i64 = inter_value as i64;
 
@@ -225,7 +211,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 	}
 
 	// Make the transfer!
-	let transfer_status = send_transfer(from_account, to_account, &currency, integer_value).await;
+	let transfer_status = send_transfer(from_account, to_account, currency, integer_value).await;
 
 	let status_response = match transfer_status {
 		TransferStatus::Authorized => "Transfer authorized.",
@@ -264,7 +250,7 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 
 	// Find currency and value.
 	let split_iterator = msg.content.split(" ");
-	let mut currency: Currency = Currency::KSN;
+	let mut currency: Currency = Currency::Ksn;
 	let mut got_currency = false;
 
 	let mut value: f64 = 0.0;
@@ -283,7 +269,7 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 		}
 
 		if got_currency == false {
-			if let Some(c) = get_currency_from_str(word) {
+			if let Ok(c) = Currency::try_from(word) {
 				got_currency = true;
 				currency = c;
 			}
@@ -315,7 +301,7 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	}
 
 	// Treat value.
-	let exp = CurrencyInfo::new(&currency).subunitexp as f64;
+	let exp = CurrencyInfo::from(currency).subunitexp as f64;
 	let inter_value = f64::floor(value * f64::powf(10.0, -exp));
 	let integer_value: i64 = inter_value as i64;
 
@@ -326,7 +312,7 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	}
 
 	// Create deposit.
-	match force_transfer(0, target_id, &currency, integer_value).await {
+	match force_transfer(0, target_id, currency, integer_value).await {
 		Ok(_) => send_simple_message("**Central:** Operation Authorized.", &ctx, &msg).await,
 		Err(_) => send_simple_message("**Central:** Operation failed", &ctx, &msg).await,
 	};
