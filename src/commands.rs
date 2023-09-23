@@ -23,7 +23,7 @@ pub async fn get_stat_command(ctx: &Context, msg: &Message) {
 	let currency = match currency {
 		Some(currency) => currency,
 		None => {
-			send_simple_message("Please specify a currency.", &ctx, &msg).await;
+			send_simple_message("Please specify a currency.", ctx, msg).await;
 			return;
 		}
 	};
