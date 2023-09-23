@@ -1,7 +1,8 @@
+use std::borrow::Cow;
+
 use crate::currency::{Currency, CurrencyInfo, ALL_CURRENCIES};
 use crate::operation::{force_transfer, get_balance, get_statement, send_transfer, TransferStatus};
 use crate::stat;
-use crate::stat::Tendency;
 
 use serenity::model::channel::Message;
 use serenity::prelude::*;
@@ -55,25 +56,40 @@ pub async fn get_stat_command(ctx: &Context, msg: &Message) {
 
 pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 	let author_id: i64 = *msg.author.id.as_u64() as i64;
-	let mut found = false;
-	let mut response: String = String::from("");
 	let image = "https://cdn.discordapp.com/attachments/1153482364907962509/1153482411871584267/currency_dollar_blue.png";
 
-	for &currency in ALL_CURRENCIES {
-		let balance = get_balance(author_id, currency).await?;
+	let (currencies, inject_all) = match msg.content.find(' ') {
+		Some(argument_index) => (
+			msg.content[argument_index..]
+				.split_whitespace()
+				.map(Currency::try_from)
+				.filter(Result::is_ok)
+				.map(Result::unwrap)
+				.collect(),
+			false,
+		),
+		None => (ALL_CURRENCIES.to_vec(), true),
+	};
 
-		if balance != 0 {
+	let response: Cow<'_, str> = if currencies.is_empty() {
+		"No currencies matched".into()
+	} else {
+		let mut result = String::new();
+
+		for currency in currencies {
+			let balance = get_balance(author_id, currency).await?;
+			if inject_all && balance == 0 {
+				continue;
+			}
+
 			let info = CurrencyInfo::from(currency);
-			let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
-			response = format!("`{} {:.02}`", &info.code, balance);
-			found = true;
-			break;
-		}
-	}
 
-	if found == false {
-		response = String::from("`KSN 0.00`");
-	}
+			let real_balance = balance as f32 * f32::powi(10.0, info.subunitexp);
+			result.push_str(&format!("`{} {:.02}`\n", info.code, real_balance));
+		}
+
+		result.into()
+	};
 
 	msg.channel_id
 		.send_message(&ctx.http, |m| {
