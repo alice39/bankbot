@@ -36,7 +36,7 @@ pub async fn get_stat_command(ctx: &Context, msg: &Message) {
 	let response = format!(
 		"Money Supply: `{} {:.02}`
 		GDP: `{} {:.02}`
-		GINI: `{:.02}`
+		GINI: `{:.05}`
 		Median: `{} {:.02}`
 		Average: `{} {:.02}`",
 		info.code,

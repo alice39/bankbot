@@ -11,10 +11,15 @@ pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
 	let currency_info = CurrencyInfo::from(currency);
 	
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let row = sqlx::query("SELECT * FROM Transfer WHERE (from_account = 0 OR to_account = 0) AND currency=? ORDER BY id DESC LIMIT 1")
+	let query = sqlx::query("SELECT * FROM Transfer WHERE (from_account = 0 OR to_account = 0) AND currency=? ORDER BY id DESC LIMIT 1")
 		.bind(currency_info.code)
-		.fetch_one(&mut conn)
+		.fetch_optional(&mut conn)
 		.await?;
+
+	let row = match query {
+		Some(row) => row,
+		None => return Ok(0),
+	};
 
 	let from_account: i64 = row.try_get("from_account")?;
 	let to_account: i64 = row.try_get("to_account")?;
@@ -81,8 +86,17 @@ pub struct Tendency {
 }
 
 pub fn calc_balances(balances: &Vec<i64>) -> Tendency {
-	// Calculate median. 0 1 2 3 4
+	// Empty balances case.
 	let size = balances.len();
+	if size == 0 {
+		return Tendency {
+			average: 0.0,
+			median: 0.0,
+			gini: 0.0,
+		}
+	}
+
+	// Calculate median. 0 1 2 3 4
 	let median : f64 = if size % 2 == 0 {
 		(balances[size/2] as f64 + balances[size / 2 - 1] as f64) / 2.0
 	} else {
@@ -105,7 +119,11 @@ pub fn calc_balances(balances: &Vec<i64>) -> Tendency {
 
 	let nsq = (size * size) as f64;
 	let den : f64 = 2.0 * nsq * average;
-	let gini : f64 = diff_sum / den;
+	let gini : f64 = if den >= 1e-6 {
+		 diff_sum / den
+	} else {
+		0.0
+	};
 
 	Tendency {
 		average,
