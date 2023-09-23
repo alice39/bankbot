@@ -88,7 +88,11 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result
 			result.push_str(&format!("`{} {:.02}`\n", info.code, real_balance));
 		}
 
-		result.into()
+		if result.is_empty() {
+			"`KSN 0.00`".into()
+		} else {
+			result.into()
+		}
 	};
 
 	msg.channel_id
