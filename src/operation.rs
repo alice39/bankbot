@@ -30,38 +30,31 @@ fn get_current_time() -> i64 {
 	return timestamp;
 }
 
-pub async fn get_balance(account: i64, currency: &Currency) -> i64 {
+pub async fn get_balance(account: i64, currency: &Currency) -> anyhow::Result<i64> {
 	let currency_info = CurrencyInfo::new(&currency);
 
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
-		.await
-		.unwrap();
-	let mut rows = sqlx::query(
-		"SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC"
-	)
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
+	let mut rows = sqlx::query("SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC")
 		.bind(currency_info.code)
 		.bind(account)
 		.bind(account)
 		.fetch(&mut conn);
 
-	while let Some(row) = rows.try_next().await.unwrap() {
-		let from_account: i64 = row.try_get("from_account").unwrap();
-		let to_account: i64 = row.try_get("to_account").unwrap();
+	let row = match rows.try_next().await? {
+		Some(row) => row,
+		None => return Ok(0),
+	};
 
-		if account == from_account {
-			let balance: i64 = row.try_get("from_balance").unwrap();
-			return balance;
-		} else if account == to_account {
-			let balance: i64 = row.try_get("to_balance").unwrap();
-			return balance;
-		} else {
-			let balance = 0;
-			return balance;
-		}
-	}
+	let from_account: i64 = row.try_get("from_account")?;
+	let to_account: i64 = row.try_get("to_account")?;
 
-	let balance = 0;
-	return balance;
+	Ok(if account == from_account {
+		row.try_get("from_balance")?
+	} else if account == to_account {
+		row.try_get("to_balance")?
+	} else {
+		0
+	})
 }
 
 pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
@@ -108,7 +101,7 @@ pub enum TransferStatus {
 	Authorized,
 	InsuficientBalance,
 	BadValue,
-	Unauthorized,
+	Failed,
 }
 
 pub async fn send_transfer(
@@ -118,12 +111,19 @@ pub async fn send_transfer(
 	value: i64,
 ) -> TransferStatus {
 	let currency_info = CurrencyInfo::new(&currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
-		.await
-		.unwrap();
+	let mut conn = match SqliteConnection::connect("sqlite://bank_database.db").await {
+		Ok(conn) => conn,
+		Err(_) => return TransferStatus::Failed,
+	};
 
-	let before_from_balance = get_balance(from_account, &currency).await;
-	let before_to_balance = get_balance(to_account, &currency).await;
+	let before_from_balance = match get_balance(from_account, &currency).await {
+		Ok(balance) => balance,
+		Err(_) => return TransferStatus::Failed,
+	};
+	let before_to_balance = match get_balance(to_account, &currency).await {
+		Ok(balance) => balance,
+		Err(_) => return TransferStatus::Failed,
+	};
 
 	if value <= 0 {
 		return TransferStatus::BadValue;
@@ -146,18 +146,23 @@ pub async fn send_transfer(
 		.bind(currency_info.code)
 		.bind(value);
 
-	conn.execute(query).await.unwrap();
-	return TransferStatus::Authorized;
+	match conn.execute(query).await {
+		Ok(_) => TransferStatus::Authorized,
+		Err(_) => TransferStatus::Failed,
+	}
 }
 
-pub async fn force_transfer(from_account: i64, to_account: i64, currency: &Currency, value: i64) {
+pub async fn force_transfer(
+	from_account: i64,
+	to_account: i64,
+	currency: &Currency,
+	value: i64,
+) -> anyhow::Result<()> {
 	let currency_info = CurrencyInfo::new(&currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
-		.await
-		.unwrap();
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
 
-	let before_from_balance = get_balance(from_account, &currency).await;
-	let before_to_balance = get_balance(to_account, &currency).await;
+	let before_from_balance = get_balance(from_account, &currency).await?;
+	let before_to_balance = get_balance(to_account, &currency).await?;
 
 	let after_from_balance = before_from_balance - value;
 	let after_to_balance = before_to_balance + value;
@@ -172,5 +177,7 @@ pub async fn force_transfer(from_account: i64, to_account: i64, currency: &Curre
 		.bind(currency_info.code)
 		.bind(value);
 
-	conn.execute(query).await.unwrap();
+	conn.execute(query).await?;
+
+	Ok(())
 }

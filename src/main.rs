@@ -24,7 +24,7 @@ impl EventHandler for Handler {
 		}
 
 		if msg.content.starts_with("!balance") {
-			commands::get_balance_command(&ctx, &msg).await;
+			commands::get_balance_command(&ctx, &msg).await.ok();
 		}
 
 		if msg.content.starts_with("!transfer") {

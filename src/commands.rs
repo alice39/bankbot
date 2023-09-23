@@ -22,13 +22,15 @@ async fn send_simple_message(response: &str, ctx: &Context, msg: &Message) {
 		.ok();
 }
 
-pub async fn get_balance_command(ctx: &Context, msg: &Message) {
+pub async fn get_balance_command(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 	let author_id: i64 = *msg.author.id.as_u64() as i64;
 	let mut found = false;
 	let mut response: String = String::from("");
 	let image = "https://cdn.discordapp.com/attachments/1153482364907962509/1153482411871584267/currency_dollar_blue.png";
+
 	for currency in ALL_CURRENCY.iter() {
-		let balance = get_balance(author_id, currency).await;
+		let balance = get_balance(author_id, currency).await?;
+
 		if balance != 0 {
 			let info = CurrencyInfo::new(currency);
 			let balance = balance as f32 * f32::powf(10.0, info.subunitexp as f32);
@@ -48,6 +50,8 @@ pub async fn get_balance_command(ctx: &Context, msg: &Message) {
 		})
 		.await
 		.ok();
+
+	Ok(())
 }
 
 pub async fn get_statement_command(ctx: &Context, msg: &Message) {
@@ -227,7 +231,7 @@ pub async fn transfer_command(ctx: &Context, msg: &Message) {
 		TransferStatus::Authorized => "Transfer authorized.",
 		TransferStatus::InsuficientBalance => "Insuficient balance for this transfer.",
 		TransferStatus::BadValue => "Inserted value is bad.",
-		TransferStatus::Unauthorized => "The transfer was not authorized, and blocked.",
+		TransferStatus::Failed => "The transfer was not authorized, and blocked.",
 	};
 
 	send_simple_message(status_response, &ctx, &msg).await;
@@ -322,7 +326,8 @@ pub async fn create_deposit_command(ctx: &Context, msg: &Message) {
 	}
 
 	// Create deposit.
-	force_transfer(0, target_id, &currency, integer_value).await;
-
-	send_simple_message("**Central:** Operation Authorized.", &ctx, &msg).await;
+	match force_transfer(0, target_id, &currency, integer_value).await {
+		Ok(_) => send_simple_message("**Central:** Operation Authorized.", &ctx, &msg).await,
+		Err(_) => send_simple_message("**Central:** Operation failed", &ctx, &msg).await,
+	};
 }
