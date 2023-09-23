@@ -7,9 +7,10 @@ pub enum Currency {
 	GBP,
 	EUR,
 	BDT,
+	COP,
 }
 
-pub static ALL_CURRENCY : [Currency; 7] = [
+pub static ALL_CURRENCY : [Currency; 8] = [
 	Currency::KSN,
 	Currency::USD,
 	Currency::BRL,
@@ -17,6 +18,7 @@ pub static ALL_CURRENCY : [Currency; 7] = [
 	Currency::GBP,
 	Currency::EUR,
 	Currency::BDT,
+	Currency::COP,
 ];
 
 pub struct CurrencyInfo {
@@ -87,10 +89,19 @@ impl CurrencyInfo {
 
 			Currency::BDT => CurrencyInfo {
 				code: String::from("BDT"),
-				prefix: String::from("€"),
+				prefix: String::from("৳"),
 				posfix: String::from("takas"),
 				name: String::from("Bangladeshi Taka"),
 				picture : String::from("https://cdn.discordapp.com/attachments/1153482364907962509/1153862592121548800/5327225.png"),
+				subunitexp: -2
+			},
+
+			Currency::COP => CurrencyInfo {
+				code: String::from("COP"),
+				prefix: String::from("$"),
+				posfix: String::from("pesos"),
+				name: String::from("Colombian Peso"),
+				picture : String::from("https://media.discordapp.net/attachments/1153482364907962509/1154949125960372235/330508.png"),
 				subunitexp: -2
 			},
 		}
