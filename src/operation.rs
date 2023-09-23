@@ -1,22 +1,21 @@
 use crate::currency::{Currency, CurrencyInfo};
 use sqlx::Connection;
-use sqlx::SqliteConnection;
 use sqlx::Executor;
 use sqlx::Row;
+use sqlx::SqliteConnection;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 
 use futures::TryStreamExt;
 // use futures_util::stream::try_stream::TryStreamExt;
 
 #[derive(Debug)]
 pub struct Transfer {
-	pub currency : Currency,
-	pub from_account : i64,
-	pub to_account : i64,	
-	pub balance : i64,
-	pub value : i64,
-	pub date : i64,
+	pub currency: Currency,
+	pub from_account: i64,
+	pub to_account: i64,
+	pub balance: i64,
+	pub value: i64,
+	pub date: i64,
 }
 
 fn get_current_time() -> i64 {
@@ -25,8 +24,8 @@ fn get_current_time() -> i64 {
 		.duration_since(UNIX_EPOCH)
 		.expect("Time went backwards");
 
-	let timestamp = since_the_epoch.as_secs() as i64* 1000 +
-		since_the_epoch.subsec_nanos() as i64 / 1_000_000;
+	let timestamp =
+		since_the_epoch.as_secs() as i64 * 1000 + since_the_epoch.subsec_nanos() as i64 / 1_000_000;
 
 	return timestamp;
 }
@@ -34,7 +33,9 @@ fn get_current_time() -> i64 {
 pub async fn get_balance(account: i64, currency: &Currency) -> i64 {
 	let currency_info = CurrencyInfo::new(&currency);
 
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
+		.await
+		.unwrap();
 	let mut rows = sqlx::query(
 		"SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC"
 	)
@@ -44,20 +45,16 @@ pub async fn get_balance(account: i64, currency: &Currency) -> i64 {
 		.fetch(&mut conn);
 
 	while let Some(row) = rows.try_next().await.unwrap() {
-		let from_account : i64 = row.try_get("from_account").unwrap();
-		let to_account : i64 = row.try_get("to_account").unwrap();
+		let from_account: i64 = row.try_get("from_account").unwrap();
+		let to_account: i64 = row.try_get("to_account").unwrap();
 
 		if account == from_account {
-			let balance : i64 = row.try_get("from_balance").unwrap();
+			let balance: i64 = row.try_get("from_balance").unwrap();
 			return balance;
-		}
-
-		else if account == to_account {
-			let balance : i64 = row.try_get("to_balance").unwrap();
+		} else if account == to_account {
+			let balance: i64 = row.try_get("to_balance").unwrap();
 			return balance;
-		}
-
-		else {
+		} else {
 			let balance = 0;
 			return balance;
 		}
@@ -69,7 +66,9 @@ pub async fn get_balance(account: i64, currency: &Currency) -> i64 {
 
 pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
 	let currency_info = CurrencyInfo::new(&currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
+		.await
+		.unwrap();
 	let mut rows = sqlx::query(
 		"SELECT * FROM Transfer WHERE currency=? AND (from_account=? OR to_account=?) ORDER BY id DESC"
 	)
@@ -78,20 +77,20 @@ pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
 		.bind(account)
 		.fetch_all(&mut conn);
 
-	let mut result : Vec<Transfer> = vec![];
+	let mut result: Vec<Transfer> = vec![];
 	if let Ok(rows) = rows.await {
 		for row in rows.iter() {
-			let date : i64 = row.try_get("transfer_date").unwrap();
-			let value : i64 = row.try_get("value").unwrap();
-			let from_account : i64 = row.try_get("from_account").unwrap();
-			let to_account : i64 = row.try_get("to_account").unwrap();
-			let balance : i64 = if from_account == account {
+			let date: i64 = row.try_get("transfer_date").unwrap();
+			let value: i64 = row.try_get("value").unwrap();
+			let from_account: i64 = row.try_get("from_account").unwrap();
+			let to_account: i64 = row.try_get("to_account").unwrap();
+			let balance: i64 = if from_account == account {
 				row.try_get("from_balance").unwrap()
 			} else {
 				row.try_get("to_balance").unwrap()
 			};
 
-			result.push( Transfer {
+			result.push(Transfer {
 				currency,
 				from_account,
 				to_account,
@@ -107,12 +106,22 @@ pub async fn get_statement(account: i64, currency: Currency) -> Vec<Transfer> {
 
 #[derive(Debug)]
 pub enum TransferStatus {
-	Authorized, InsuficientBalance, BadValue, Unauthorized,
+	Authorized,
+	InsuficientBalance,
+	BadValue,
+	Unauthorized,
 }
 
-pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Currency, value: i64) -> TransferStatus {
+pub async fn send_transfer(
+	from_account: i64,
+	to_account: i64,
+	currency: &Currency,
+	value: i64,
+) -> TransferStatus {
 	let currency_info = CurrencyInfo::new(&currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
+		.await
+		.unwrap();
 
 	let before_from_balance = get_balance(from_account, &currency).await;
 	let before_to_balance = get_balance(to_account, &currency).await;
@@ -144,7 +153,9 @@ pub async fn send_transfer(from_account: i64, to_account: i64, currency: &Curren
 
 pub async fn force_transfer(from_account: i64, to_account: i64, currency: &Currency, value: i64) {
 	let currency_info = CurrencyInfo::new(&currency);
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await.unwrap();
+	let mut conn = SqliteConnection::connect("sqlite://bank_database.db")
+		.await
+		.unwrap();
 
 	let before_from_balance = get_balance(from_account, &currency).await;
 	let before_to_balance = get_balance(to_account, &currency).await;

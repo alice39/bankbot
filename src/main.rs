@@ -6,12 +6,9 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 
+mod commands;
 mod currency;
 mod operation;
-mod commands;
-
-
-
 
 struct Handler {
 	director_id: u64,
@@ -56,7 +53,9 @@ async fn main() {
 
 	let token = env::var("BANK_DISCORD_TOKEN").expect("Expected a token in the environment.");
 	let director_id = env::var("DIRECTOR_ID").expect("Expected an admin ID.");
-	let director_id = director_id.parse::<u64>().expect("Expected an integer admin ID.");
+	let director_id = director_id
+		.parse::<u64>()
+		.expect("Expected an integer admin ID.");
 
 	let intents = GatewayIntents::GUILD_MESSAGES
 		| GatewayIntents::DIRECT_MESSAGES
@@ -64,7 +63,8 @@ async fn main() {
 
 	let mut client = Client::builder(&token, intents)
 		.event_handler(Handler { director_id })
-		.await.expect("Err creating client");
+		.await
+		.expect("Err creating client");
 
 	if let Err(why) = client.start().await {
 		println!("Client error: {:?}", why);
