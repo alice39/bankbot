@@ -8,10 +8,9 @@ use crate::operation;
 use crate::operation::{LedgerRow, BANK_ID};
 
 pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
-	match operation::get_balance(BANK_ID, currency).await {
-		Ok(value) => Ok(-value),
-		Err(e) => Err(e),
-	}
+	operation::get_balance(BANK_ID, currency)
+		.await
+		.map(|value| -value)
 }
 
 pub async fn get_all_transfers(currency: Currency) -> anyhow::Result<i64> {
