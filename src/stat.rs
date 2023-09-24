@@ -13,10 +13,12 @@ pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
 	let row = sqlx::query_as::<_, LedgerRow>(
 		r#"SELECT * FROM Transfer
-		WHERE (from_account = 0 OR to_account = 0) AND currency=?
+		WHERE (from_account = ? OR to_account = ?) AND currency=?
 		ORDER BY id DESC
 		LIMIT 1"#,
 	)
+	.bind(BANK_ID)
+	.bind(BANK_ID)
 	.bind(currency_info.code)
 	.fetch_optional(&mut conn)
 	.await?;
@@ -33,8 +35,9 @@ pub async fn get_all_transfers(currency: Currency) -> anyhow::Result<i64> {
 
 	Ok(sqlx::query_as::<_, (i64,)>(
 		r#"SELECT SUM(value) FROM Transfer
-		WHERE from_account != 0 AND currency=?"#,
+		WHERE from_account != ? AND currency=?"#,
 	)
+	.bind(BANK_ID)
 	.bind(currency_info.code)
 	.fetch_one(&mut conn)
 	.await?
