@@ -3,30 +3,15 @@ use sqlx::SqliteConnection;
 use std::collections::HashSet;
 
 use crate::currency::{Currency, CurrencyInfo};
-use crate::operation::{LedgerRow, Transfer, BANK_ID};
 
-// All Balances. Average. Median. GINI.
+use crate::operation;
+use crate::operation::{LedgerRow, BANK_ID};
 
 pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
-	let currency_info = CurrencyInfo::from(currency);
-
-	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let row = sqlx::query_as::<_, LedgerRow>(
-		r#"SELECT * FROM Transfer
-		WHERE (from_account = ? OR to_account = ?) AND currency=?
-		ORDER BY id DESC
-		LIMIT 1"#,
-	)
-	.bind(BANK_ID)
-	.bind(BANK_ID)
-	.bind(currency_info.code)
-	.fetch_optional(&mut conn)
-	.await?;
-
-	Ok(match row {
-		Some(row) => -Transfer::try_from((BANK_ID, row))?.balance,
-		None => 0,
-	})
+	match operation::get_balance(BANK_ID, currency).await {
+		Ok(value) => Ok(-value),
+		Err(e) => Err(e),
+	}
 }
 
 pub async fn get_all_transfers(currency: Currency) -> anyhow::Result<i64> {
