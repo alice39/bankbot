@@ -1,8 +1,9 @@
-use crate::currency::{Currency, CurrencyInfo};
 use sqlx::Connection;
-use sqlx::Row;
 use sqlx::SqliteConnection;
 use std::collections::HashSet;
+
+use crate::currency::{Currency, CurrencyInfo};
+use crate::operation::{LedgerRow, Transfer, BANK_ID};
 
 // All Balances. Average. Median. GINI.
 
@@ -10,66 +11,75 @@ pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
 	let currency_info = CurrencyInfo::from(currency);
 
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let query = sqlx::query("SELECT * FROM Transfer WHERE (from_account = 0 OR to_account = 0) AND currency=? ORDER BY id DESC LIMIT 1")
-		.bind(currency_info.code)
-		.fetch_optional(&mut conn)
-		.await?;
+	let row = sqlx::query_as::<_, LedgerRow>(
+		r#"SELECT * FROM Transfer
+		WHERE (from_account = ? OR to_account = ?) AND currency=?
+		ORDER BY id DESC
+		LIMIT 1"#,
+	)
+	.bind(BANK_ID)
+	.bind(BANK_ID)
+	.bind(currency_info.code)
+	.fetch_optional(&mut conn)
+	.await?;
 
-	let row = match query {
-		Some(row) => row,
-		None => return Ok(0),
-	};
-
-	let from_account: i64 = row.try_get("from_account")?;
-	let to_account: i64 = row.try_get("to_account")?;
-
-	Ok(if from_account == 0 {
-		-row.try_get("from_balance")?
-	} else if to_account == 0 {
-		-row.try_get("to_balance")?
-	} else {
-		0
+	Ok(match row {
+		Some(row) => -Transfer::try_from((BANK_ID, row))?.balance,
+		None => 0,
 	})
 }
 
 pub async fn get_all_transfers(currency: Currency) -> anyhow::Result<i64> {
 	let currency_info = CurrencyInfo::from(currency);
-
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let row = sqlx::query("SELECT SUM(value) FROM Transfer WHERE from_account != 0 AND currency=?")
-		.bind(currency_info.code)
-		.fetch_one(&mut conn)
-		.await?;
 
-	Ok(row.try_get(0)?)
+	Ok(sqlx::query_as::<_, (i64,)>(
+		r#"SELECT SUM(value) FROM Transfer
+		WHERE from_account != ? AND currency=?"#,
+	)
+	.bind(BANK_ID)
+	.bind(currency_info.code)
+	.fetch_one(&mut conn)
+	.await?
+	.0)
 }
 
 pub async fn get_all_balances(currency: Currency) -> anyhow::Result<Vec<i64>> {
 	let currency_info = CurrencyInfo::from(currency);
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
 
-	let query = sqlx::query("SELECT * FROM Transfer WHERE currency=? ORDER BY id DESC")
-		.bind(currency_info.code)
-		.fetch_all(&mut conn);
+	let rows = sqlx::query_as::<_, LedgerRow>(
+		r#"SELECT * FROM Transfer
+		WHERE currency=?
+		ORDER BY id DESC"#,
+	)
+	.bind(currency_info.code)
+	.fetch_all(&mut conn)
+	.await?;
 
-	let mut result: Vec<i64> = Vec::new();
-	let mut processed: HashSet<i64> = HashSet::new();
-	if let Ok(rows) = query.await {
-		for row in rows.iter() {
-			let from_account: i64 = row.try_get("from_account")?;
-			let to_account: i64 = row.try_get("to_account")?;
+	let mut processed = HashSet::new();
 
-			if !processed.contains(&from_account) && from_account != 0 {
-				result.push(row.try_get("from_balance")?);
+	let mut result = rows
+		.into_iter()
+		.fold(vec![], move |mut balances, ledger_row| {
+			let from_account = ledger_row.from_account;
+			let from_balance = ledger_row.from_balance;
+
+			let to_account = ledger_row.to_account;
+			let to_balance = ledger_row.to_balance;
+
+			if from_account != BANK_ID && !processed.contains(&from_account) {
+				balances.push(from_balance);
 				processed.insert(from_account);
 			}
 
-			if !processed.contains(&to_account) && to_account != 0 {
-				result.push(row.try_get("to_balance")?);
+			if to_account != BANK_ID && !processed.contains(&to_account) {
+				balances.push(to_balance);
 				processed.insert(to_account);
 			}
-		}
-	}
+
+			balances
+		});
 
 	result.sort();
 	Ok(result)

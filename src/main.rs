@@ -32,8 +32,7 @@ impl EventHandler for Handler {
 			commands::transfer_command(&ctx, &msg).await;
 			None
 		} else if msg.content.starts_with("!statement") {
-			commands::get_statement_command(&ctx, &msg).await;
-			None
+			commands::get_statement_command(&ctx, &msg).await.err()
 		} else if msg.content.starts_with("!stat ") {
 			commands::get_stat_command(&ctx, &msg).await;
 			None
