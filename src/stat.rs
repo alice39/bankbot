@@ -3,7 +3,7 @@ use sqlx::SqliteConnection;
 use std::collections::HashSet;
 
 use crate::currency::{Currency, CurrencyInfo};
-use crate::operation::{Transfer, TransferRow, BANK_ID};
+use crate::operation::{LedgerRow, Transfer, BANK_ID};
 
 // All Balances. Average. Median. GINI.
 
@@ -11,7 +11,7 @@ pub async fn get_money_supply(currency: Currency) -> anyhow::Result<i64> {
 	let currency_info = CurrencyInfo::from(currency);
 
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let row = sqlx::query_as::<_, TransferRow>(
+	let row = sqlx::query_as::<_, LedgerRow>(
 		r#"SELECT * FROM Transfer
 		WHERE (from_account = 0 OR to_account = 0) AND currency=?
 		ORDER BY id DESC
@@ -45,7 +45,7 @@ pub async fn get_all_balances(currency: Currency) -> anyhow::Result<Vec<i64>> {
 	let currency_info = CurrencyInfo::from(currency);
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
 
-	let rows = sqlx::query_as::<_, TransferRow>(
+	let rows = sqlx::query_as::<_, LedgerRow>(
 		r#"SELECT * FROM Transfer
 		WHERE currency=?
 		ORDER BY id DESC"#,
@@ -58,12 +58,12 @@ pub async fn get_all_balances(currency: Currency) -> anyhow::Result<Vec<i64>> {
 
 	let mut result = rows
 		.into_iter()
-		.fold(vec![], move |mut balances, transfer_row| {
-			let from_account = transfer_row.from_account;
-			let from_balance = transfer_row.from_balance;
+		.fold(vec![], move |mut balances, ledger_row| {
+			let from_account = ledger_row.from_account;
+			let from_balance = ledger_row.from_balance;
 
-			let to_account = transfer_row.to_account;
-			let to_balance = transfer_row.to_balance;
+			let to_account = ledger_row.to_account;
+			let to_balance = ledger_row.to_balance;
 
 			if from_account != BANK_ID && !processed.contains(&from_account) {
 				balances.push(from_balance);

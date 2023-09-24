@@ -14,7 +14,7 @@ pub struct Transfer {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct TransferRow {
+pub struct LedgerRow {
 	pub id: u32,
 	pub currency: String,
 	pub from_account: UserId,
@@ -43,7 +43,7 @@ pub async fn get_balance(account: i64, currency: Currency) -> anyhow::Result<i64
 	let currency_info = CurrencyInfo::from(currency);
 
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let transfer_row = sqlx::query_as::<_, TransferRow>(
+	let ledger_row = sqlx::query_as::<_, LedgerRow>(
 		r#"SELECT * FROM Transfer
 		WHERE currency=? AND (from_account=? OR to_account=?)
 		ORDER BY id DESC"#,
@@ -54,7 +54,7 @@ pub async fn get_balance(account: i64, currency: Currency) -> anyhow::Result<i64
 	.fetch_optional(&mut conn)
 	.await?;
 
-	Ok(match transfer_row {
+	Ok(match ledger_row {
 		Some(row) => Transfer::try_from((account, row))?.balance,
 		None => 0,
 	})
@@ -64,7 +64,7 @@ pub async fn get_statement(account: i64, currency: Currency) -> anyhow::Result<V
 	let currency_info = CurrencyInfo::from(currency);
 
 	let mut conn = SqliteConnection::connect("sqlite://bank_database.db").await?;
-	let transfer_rows = sqlx::query_as::<_, TransferRow>(
+	let ledger_rows = sqlx::query_as::<_, LedgerRow>(
 		r#"SELECT * FROM Transfer
 		WHERE currency=? AND (from_account=? OR to_account=?)
 		ORDER BY id DESC"#,
@@ -75,7 +75,7 @@ pub async fn get_statement(account: i64, currency: Currency) -> anyhow::Result<V
 	.fetch_all(&mut conn)
 	.await?;
 
-	Ok(transfer_rows
+	Ok(ledger_rows
 		.into_iter()
 		.filter_map(|row| Transfer::try_from((account, row)).ok())
 		.collect())
@@ -175,10 +175,10 @@ pub async fn force_transfer(
 	Ok(())
 }
 
-impl TryFrom<(UserId, TransferRow)> for Transfer {
+impl TryFrom<(UserId, LedgerRow)> for Transfer {
 	type Error = anyhow::Error;
 
-	fn try_from((id, row): (UserId, TransferRow)) -> Result<Self, Self::Error> {
+	fn try_from((id, row): (UserId, LedgerRow)) -> Result<Self, Self::Error> {
 		Ok(Self {
 			currency: Currency::try_from(row.currency.as_str())?,
 			from_account: row.from_account,
@@ -196,10 +196,10 @@ impl TryFrom<(UserId, TransferRow)> for Transfer {
 	}
 }
 
-impl TryFrom<(TransferRow, UserId)> for Transfer {
+impl TryFrom<(LedgerRow, UserId)> for Transfer {
 	type Error = anyhow::Error;
 
-	fn try_from((row, id): (TransferRow, UserId)) -> Result<Self, Self::Error> {
+	fn try_from((row, id): (LedgerRow, UserId)) -> Result<Self, Self::Error> {
 		(id, row).try_into()
 	}
 }
